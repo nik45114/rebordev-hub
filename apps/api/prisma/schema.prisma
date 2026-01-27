@@ -1,0 +1,463 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============= ПОЛЬЗОВАТЕЛИ И АВТОРИЗАЦИЯ =============
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String?  // Null для OAuth users
+  name          String
+  avatarUrl     String?
+  telegramId    String?  @unique
+  role          UserRole @default(DEVELOPER)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Связи
+  authoredProjects  Project[]       @relation("ProjectOwner")
+  assignedTasks     Task[]          @relation("TaskAssignee")
+  authoredTasks     Task[]          @relation("TaskAuthor")
+  skills            UserSkill[]
+  chatMessages      ChatMessage[]
+  sessions          Session[]
+  notifications     Notification[]
+  taskComments      TaskComment[]
+
+  @@index([email])
+  @@index([telegramId])
+}
+
+enum UserRole {
+  OWNER
+  TEAMLEAD
+  DEVELOPER
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  userAgent String?
+  ipAddress String?
+
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
+
+// ============= НАВЫКИ СОТРУДНИКОВ =============
+
+model UserSkill {
+  id              String   @id @default(cuid())
+  userId          String
+  name            String   // Python, React, PostgreSQL
+  xp              Int      @default(0)
+  level           Int      @default(1)
+  tasksCompleted  Int      @default(0)
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+// ============= ПРОЕКТЫ =============
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(IN_PROGRESS)
+  priority    Priority      @default(MEDIUM)
+  deadline    DateTime?
+  budget      Decimal?      @db.Decimal(12, 2)
+
+  ownerId     String
+  orderId     String?       @unique // Связь с фриланс-заказом
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  // Связи
+  owner       User          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  tasks       Task[]
+  chats       Chat[]
+  order       Order?        @relation(fields: [orderId], references: [id])
+
+  @@index([ownerId])
+  @@index([status])
+}
+
+enum ProjectStatus {
+  DRAFT
+  IN_PROGRESS
+  REVIEW
+  COMPLETED
+  ARCHIVED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// ============= ЗАДАЧИ =============
+
+model Task {
+  id            String     @id @default(cuid())
+  projectId     String
+  parentId      String?    // Для субзадач
+
+  title         String
+  description   String?    @db.Text
+  status        TaskStatus @default(BACKLOG)
+  priority      Priority   @default(MEDIUM)
+
+  authorId      String
+  assigneeId    String?
+
+  estimatedHours Decimal?  @db.Decimal(6, 2)
+  tags          String[]   // ["Python", "API", "Backend"]
+  order         Int        @default(0)
+  deadline      DateTime?
+  completedAt   DateTime?
+  dependencies  String[]   // IDs других задач
+
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  // Связи
+  project       Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  author        User       @relation("TaskAuthor", fields: [authorId], references: [id])
+  assignee      User?      @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  parent        Task?      @relation("Subtasks", fields: [parentId], references: [id])
+  subtasks      Task[]     @relation("Subtasks")
+  comments      TaskComment[]
+  files         TaskFile[]
+  chats         Chat[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([assigneeId])
+  @@index([authorId])
+}
+
+enum TaskStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  userId    String
+  content   String   @db.Text
+  mentions  String[] // User IDs
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([taskId])
+}
+
+model TaskFile {
+  id        String   @id @default(cuid())
+  taskId    String
+  filename  String
+  url       String
+  mimeType  String
+  size      Int
+
+  uploadedAt DateTime @default(now())
+
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+// ============= ФРИЛАНС =============
+
+model Order {
+  id          String      @id @default(cuid())
+  title       String
+  description String      @db.Text
+  source      OrderSource // FL.ru, Kwork, etc
+  sourceUrl   String
+  budget      Decimal?    @db.Decimal(12, 2)
+  currency    String      @default("RUB")
+  status      OrderStatus @default(NEW)
+
+  clientId    String?
+  stackMatch  Int?        // 0-100%
+  aiAnalysis  Json?       // AI анализ заказа
+
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Связи
+  client      Client?     @relation(fields: [clientId], references: [id])
+  project     Project?
+  chats       Chat[]
+
+  @@index([status])
+  @@index([source])
+}
+
+enum OrderSource {
+  FL_RU
+  KWORK
+  HABR_FREELANCE
+  FREELANCE_RU
+  UPWORK
+  FREELANCER
+  FIVERR
+  TOPTAL
+  MANUAL
+}
+
+enum OrderStatus {
+  NEW
+  RESPONDED
+  NEGOTIATING
+  AGREED
+  IN_PROGRESS
+  DELIVERED
+  PAID
+  ARCHIVED
+  REJECTED
+}
+
+model Client {
+  id          String   @id @default(cuid())
+  name        String
+  company     String?
+  email       String?
+  telegram    String?
+  phone       String?
+  source      OrderSource
+
+  notes       String?  @db.Text
+  totalPaid   Decimal  @default(0) @db.Decimal(12, 2)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+
+  @@index([source])
+}
+
+// ============= ЧАТЫ С AI =============
+
+model Chat {
+  id          String   @id @default(cuid())
+  name        String
+  type        ChatType
+  mode        ChatMode @default(CODE)
+  model       AIModel  @default(CLAUDE_CODE)
+
+  projectId   String?
+  taskId      String?
+  orderId     String?
+
+  serverId    String?  // Подключенный сервер
+
+  contextConfig Json?  // Настройки контекста (память, файлы)
+  restrictions  Json?  // Ограничения (папки, файлы)
+
+  tokensUsed  Int      @default(0)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Связи
+  project     Project? @relation(fields: [projectId], references: [id])
+  task        Task?    @relation(fields: [taskId], references: [id])
+  order       Order?   @relation(fields: [orderId], references: [id])
+  server      Server?  @relation(fields: [serverId], references: [id])
+  messages    ChatMessage[]
+  memory      MemoryEntry[]
+
+  @@index([projectId])
+  @@index([taskId])
+  @@index([orderId])
+}
+
+enum ChatType {
+  ORDER       // Чат по заказу
+  PROJECT     // Чат по проекту
+  TASK        // Чат по задаче
+  FREE        // Свободный чат
+  TEAM        // Командный чат
+}
+
+enum ChatMode {
+  ARCHITECT   // Планирование
+  CODE        // Написание кода
+  REVIEW      // Ревью кода
+  DEBUG       // Отладка
+  ASK         // Вопросы
+  CREATIVE    // Креативные решения
+}
+
+enum AIModel {
+  CLAUDE_CODE  // Claude Code CLI
+  CODEX        // OpenAI Codex CLI
+  DEEPSEEK     // DeepSeek API
+  GPT4         // OpenAI GPT-4 API
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  chatId    String
+  userId    String?  // Null для AI сообщений
+  role      MessageRole
+  content   String   @db.Text
+
+  metadata  Json?    // Code blocks, files, etc
+  tokensUsed Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  chat      Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+
+  @@index([chatId])
+  @@index([createdAt])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ============= СИСТЕМА ПАМЯТИ AI =============
+
+model MemoryEntry {
+  id        String      @id @default(cuid())
+  chatId    String?
+  projectId String?
+  userId    String?
+
+  level     MemoryLevel
+  key       String      // Ключ для поиска
+  content   String      @db.Text
+  embedding String?     // Vector для семантического поиска (JSON string)
+
+  metadata  Json?
+
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  chat      Chat?       @relation(fields: [chatId], references: [id])
+
+  @@index([chatId])
+  @@index([level])
+}
+
+enum MemoryLevel {
+  GLOBAL      // Глобальная память
+  PROJECT     // Память проекта
+  CHAT        // Память чата
+  USER        // Персональная память
+}
+
+// ============= СЕРВЕРЫ =============
+
+model Server {
+  id          String       @id @default(cuid())
+  name        String
+  host        String
+  port        Int          @default(22)
+  username    String
+  authType    ServerAuth
+  privateKey  String?      @db.Text
+
+  status      ServerStatus @default(OFFLINE)
+  lastBackup  DateTime?
+
+  metrics     Json?        // CPU, RAM, Disk
+
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  chats       Chat[]
+  backups     Backup[]
+
+  @@index([status])
+}
+
+enum ServerAuth {
+  SSH_KEY
+  AGENT
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  ERROR
+}
+
+model Backup {
+  id        String   @id @default(cuid())
+  serverId  String
+  path      String
+  size      Int
+
+  createdAt DateTime @default(now())
+
+  server    Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+// ============= УВЕДОМЛЕНИЯ =============
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+
+  read      Boolean          @default(false)
+
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([read])
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_COMPLETED
+  DEADLINE_APPROACHING
+  REVIEW_REQUIRED
+  MENTION
+  HELP_REQUEST
+  ORDER_NEW
+  SERVER_ALERT
+}
