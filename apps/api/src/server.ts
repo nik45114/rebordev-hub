@@ -24,9 +24,14 @@ export async function buildServer() {
     },
   })
 
-  // CORS
+  // CORS - allow multiple origins
   await server.register(cors, {
-    origin: env.FRONTEND_URL,
+    origin: [
+      env.FRONTEND_URL,
+      'https://web-eta-two-88.vercel.app',
+      'http://localhost:3000',
+      'http://localhost:3002'
+    ],
     credentials: true,
   })
 
