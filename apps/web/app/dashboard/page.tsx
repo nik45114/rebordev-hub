@@ -8,7 +8,7 @@ import {
   FolderIcon,
   UsersIcon,
   ClockIcon,
-  CurrencyDollarIcon,
+  DollarSign,
   PlusIcon,
 } from "lucide-react";
 
@@ -42,7 +42,7 @@ export default function DashboardPage() {
       title: "Доход",
       value: "$12,450",
       description: "За текущий месяц",
-      icon: CurrencyDollarIcon,
+      icon: DollarSign,
       trend: { value: 8.2, isPositive: true },
     },
   ];
@@ -156,7 +156,7 @@ export default function DashboardPage() {
               { label: "Создать проект", icon: FolderIcon },
               { label: "Пригласить в команду", icon: UsersIcon },
               { label: "Новая задача", icon: ClockIcon },
-              { label: "Добавить счёт", icon: CurrencyDollarIcon },
+              { label: "Добавить счёт", icon: DollarSign },
             ].map((action, index) => (
               <Button
                 key={index}
