@@ -1,0 +1,28 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksPlan]
+providers = ["node"]
+
+[build.nixpacksPlan.phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[build.nixpacksPlan.phases.install]
+cmds = [
+  "npm install -g pnpm@10.28.2",
+  "cd apps/api && pnpm install --frozen-lockfile"
+]
+
+[build.nixpacksPlan.phases.build]
+cmds = [
+  "cd apps/api && pnpm build"
+]
+
+[build.nixpacksPlan.start]
+cmd = "cd apps/api && pnpm start"
+
+[deploy]
+startCommand = "cd apps/api && pnpm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
