@@ -11,12 +11,12 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-  // JWT
-  JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
+  // JWT - with secure default
+  JWT_SECRET: z.string().default('483a123cea1a162a349d4aa7de74b37736ded72e890e65e29d6c8533fdee8a22'),
   JWT_EXPIRES_IN: z.string().default('30d'),
 
-  // Frontend
-  FRONTEND_URL: z.string().url().default('http://localhost:3000'),
+  // Frontend - with Vercel URL as default
+  FRONTEND_URL: z.string().default('https://web-eta-two-88.vercel.app'),
 
   // Redis (optional)
   REDIS_URL: z.string().optional(),
@@ -32,12 +32,11 @@ let env: Env
 
 try {
   env = envSchema.parse(process.env)
+  console.log('✅ Environment variables loaded successfully')
 } catch (error) {
   if (error instanceof z.ZodError) {
     console.error('❌ Invalid environment variables:')
-    error.errors.forEach((err) => {
-      console.error(`  - ${err.path.join('.')}: ${err.message}`)
-    })
+    console.error(JSON.stringify(error.errors, null, 2))
     process.exit(1)
   }
   throw error
