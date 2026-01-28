@@ -6,9 +6,8 @@ export interface JwtPayload {
 }
 
 export function generateToken(payload: JwtPayload): string {
-  return jwt.sign(payload, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
-  })
+  const token = jwt.sign(payload, env.JWT_SECRET, { expiresIn: '30d' })
+  return token
 }
 
 export function verifyToken(token: string): JwtPayload {
